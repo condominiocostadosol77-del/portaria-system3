@@ -1,17 +1,19 @@
 import React, { useState, useMemo } from 'react';
-import { Plus, Search, Calendar, AlertTriangle } from 'lucide-react';
+import { Plus, Search, Calendar, AlertTriangle, Loader2 } from 'lucide-react';
 import { Company } from '../types';
 import { CompanyCard } from './CompanyCard';
 import { CompanyModal } from './CompanyModal';
 
 interface CompaniesPageProps {
   companies: Company[];
-  setCompanies: React.Dispatch<React.SetStateAction<Company[]>>;
+  onSave: (data: Partial<Company>) => Promise<void>;
+  onDelete: (id: string) => Promise<void>;
 }
 
-export const CompaniesPage: React.FC<CompaniesPageProps> = ({ companies, setCompanies }) => {
+export const CompaniesPage: React.FC<CompaniesPageProps> = ({ companies, onSave, onDelete }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<'todos' | 'ativa' | 'inativa'>('todos');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -45,23 +47,36 @@ export const CompaniesPage: React.FC<CompaniesPageProps> = ({ companies, setComp
     setDeleteId(id);
   };
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (deleteId) {
-      setCompanies(prev => prev.filter(c => c.id !== deleteId));
-      setDeleteId(null);
+      setIsSubmitting(true);
+      try {
+        await onDelete(deleteId);
+        setDeleteId(null);
+      } catch (error) {
+        console.error(error);
+        alert('Erro ao excluir empresa.');
+      } finally {
+        setIsSubmitting(false);
+      }
     }
   };
 
-  const handleSubmit = (data: Omit<Company, 'id'>) => {
-    if (editingId) {
-      // Edit existing
-      setCompanies(prev => prev.map(c => c.id === editingId ? { ...data, id: editingId } : c));
-    } else {
-      // Create new
-      const newId = Math.random().toString(36).substr(2, 9);
-      setCompanies(prev => [{ ...data, id: newId }, ...prev]);
+  const handleSubmit = async (data: Omit<Company, 'id'>) => {
+    setIsSubmitting(true);
+    try {
+      if (editingId) {
+        await onSave({ ...data, id: editingId });
+      } else {
+        await onSave(data);
+      }
+      setIsModalOpen(false);
+    } catch (error) {
+      console.error(error);
+      alert('Erro ao salvar empresa.');
+    } finally {
+      setIsSubmitting(false);
     }
-    setIsModalOpen(false);
   };
 
   const editingCompany = editingId ? companies.find(c => c.id === editingId) : undefined;
@@ -169,15 +184,17 @@ export const CompaniesPage: React.FC<CompaniesPageProps> = ({ companies, setComp
               <div className="flex items-center gap-3 w-full">
                 <button 
                   onClick={() => setDeleteId(null)}
+                  disabled={isSubmitting}
                   className="flex-1 px-4 py-2.5 rounded-lg border border-gray-300 text-slate-700 font-medium hover:bg-slate-50 transition-colors"
                 >
                   Cancelar
                 </button>
                 <button 
                   onClick={confirmDelete}
-                  className="flex-1 px-4 py-2.5 rounded-lg bg-red-500 hover:bg-red-600 text-white font-medium transition-colors shadow-lg shadow-red-200"
+                  disabled={isSubmitting}
+                  className="flex-1 px-4 py-2.5 rounded-lg bg-red-500 hover:bg-red-600 text-white font-medium transition-colors shadow-lg shadow-red-200 flex items-center justify-center gap-2"
                 >
-                  Excluir
+                  {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : 'Excluir'}
                 </button>
               </div>
             </div>

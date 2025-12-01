@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Plus, Search, FileEdit, FileText, AlertTriangle } from 'lucide-react';
+import { Plus, Search, FileEdit, FileText, AlertTriangle, Loader2 } from 'lucide-react';
 import { Occurrence, Employee } from '../types';
 import { OccurrenceCard } from './OccurrenceCard';
 import { OccurrenceModal } from './OccurrenceModal';
@@ -7,18 +7,21 @@ import { OccurrenceDetailsModal } from './OccurrenceDetailsModal';
 
 interface OccurrencesPageProps {
   occurrences: Occurrence[];
-  setOccurrences: React.Dispatch<React.SetStateAction<Occurrence[]>>;
   employees: Employee[];
+  onSave: (data: Partial<Occurrence>) => Promise<void>;
+  onDelete: (id: string) => Promise<void>;
   onOpenNotepad: () => void;
 }
 
 export const OccurrencesPage: React.FC<OccurrencesPageProps> = ({ 
   occurrences, 
-  setOccurrences, 
   employees,
+  onSave,
+  onDelete,
   onOpenNotepad
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   // Modals
   const [isNewModalOpen, setIsNewModalOpen] = useState(false);
@@ -38,29 +41,40 @@ export const OccurrencesPage: React.FC<OccurrencesPageProps> = ({
   }, [occurrences, searchTerm]);
 
   // Handlers
-  const handleCreate = (data: Omit<Occurrence, 'id' | 'timestamp'>) => {
-    const now = new Date();
-    const months = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
-    const timestamp = `${now.getDate()} de ${months[now.getMonth()]} de ${now.getFullYear()} às ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+  const handleCreate = async (data: Omit<Occurrence, 'id' | 'timestamp'>) => {
+    setIsSubmitting(true);
+    try {
+      const now = new Date();
+      const months = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+      const timestamp = `${now.getDate()} de ${months[now.getMonth()]} de ${now.getFullYear()} às ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
 
-    const newOccurrence: Occurrence = {
-      id: Math.random().toString(36).substr(2, 9),
-      timestamp,
-      ...data
-    };
-
-    setOccurrences([newOccurrence, ...occurrences]);
+      await onSave({ ...data, timestamp });
+      setIsNewModalOpen(false);
+    } catch (error) {
+      console.error(error);
+      alert('Erro ao registrar ocorrência.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleDelete = (id: string) => {
     setDeleteId(id);
   };
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (deleteId) {
-      setOccurrences(prev => prev.filter(o => o.id !== deleteId));
-      setDeleteId(null);
-      if (isDetailsModalOpen) setIsDetailsModalOpen(false);
+      setIsSubmitting(true);
+      try {
+        await onDelete(deleteId);
+        setDeleteId(null);
+        if (isDetailsModalOpen) setIsDetailsModalOpen(false);
+      } catch (error) {
+        console.error(error);
+        alert('Erro ao excluir ocorrência.');
+      } finally {
+        setIsSubmitting(false);
+      }
     }
   };
 
@@ -163,15 +177,17 @@ export const OccurrencesPage: React.FC<OccurrencesPageProps> = ({
               <div className="flex items-center gap-3 w-full">
                 <button 
                   onClick={() => setDeleteId(null)}
+                  disabled={isSubmitting}
                   className="flex-1 px-4 py-2.5 rounded-lg border border-gray-300 text-slate-700 font-medium hover:bg-slate-50 transition-colors"
                 >
                   Cancelar
                 </button>
                 <button 
                   onClick={confirmDelete}
-                  className="flex-1 px-4 py-2.5 rounded-lg bg-red-500 hover:bg-red-600 text-white font-medium transition-colors shadow-lg shadow-red-200"
+                  disabled={isSubmitting}
+                  className="flex-1 px-4 py-2.5 rounded-lg bg-red-500 hover:bg-red-600 text-white font-medium transition-colors shadow-lg shadow-red-200 flex items-center justify-center gap-2"
                 >
-                  Excluir
+                  {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : 'Excluir'}
                 </button>
               </div>
             </div>

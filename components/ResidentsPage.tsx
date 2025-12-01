@@ -1,21 +1,24 @@
 import React, { useState, useMemo } from 'react';
-import { Plus, Search, Calendar, AlertTriangle } from 'lucide-react';
+import { Plus, Search, Calendar, AlertTriangle, Loader2 } from 'lucide-react';
 import { Resident } from '../types';
 import { ResidentCard } from './ResidentCard';
 import { ResidentModal } from './ResidentModal';
 
 interface ResidentsPageProps {
   residents: Resident[];
-  setResidents: React.Dispatch<React.SetStateAction<Resident[]>>;
+  onSave: (data: Partial<Resident>) => Promise<void>;
+  onDelete: (id: string) => Promise<void>;
+  isLoading?: boolean;
 }
 
-export const ResidentsPage: React.FC<ResidentsPageProps> = ({ residents, setResidents }) => {
+export const ResidentsPage: React.FC<ResidentsPageProps> = ({ residents, onSave, onDelete, isLoading = false }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<'todos' | 'ativo' | 'inativo'>('todos');
   
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   // Delete Confirmation State
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -50,23 +53,30 @@ export const ResidentsPage: React.FC<ResidentsPageProps> = ({ residents, setResi
     setDeleteId(id);
   };
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (deleteId) {
-      setResidents(prev => prev.filter(r => r.id !== deleteId));
+      setIsSubmitting(true);
+      await onDelete(deleteId);
+      setIsSubmitting(false);
       setDeleteId(null);
     }
   };
 
-  const handleSubmit = (data: Omit<Resident, 'id'>) => {
-    if (editingId) {
-      // Edit existing
-      setResidents(prev => prev.map(r => r.id === editingId ? { ...data, id: editingId } : r));
-    } else {
-      // Create new
-      const newId = Math.random().toString(36).substr(2, 9);
-      setResidents(prev => [{ ...data, id: newId }, ...prev]);
+  const handleSubmit = async (data: Omit<Resident, 'id'>) => {
+    setIsSubmitting(true);
+    try {
+      if (editingId) {
+        await onSave({ ...data, id: editingId });
+      } else {
+        await onSave(data);
+      }
+      setIsModalOpen(false);
+    } catch (error) {
+      console.error("Erro ao salvar:", error);
+      alert("Erro ao salvar morador.");
+    } finally {
+      setIsSubmitting(false);
     }
-    setIsModalOpen(false);
   };
 
   const editingResident = editingId ? residents.find(r => r.id === editingId) : undefined;
@@ -82,7 +92,8 @@ export const ResidentsPage: React.FC<ResidentsPageProps> = ({ residents, setResi
         
         <button 
           onClick={handleAddNew}
-          className="bg-primary hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg flex items-center gap-2 font-medium shadow-lg shadow-blue-200 transition-colors"
+          disabled={isLoading}
+          className="bg-primary hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg flex items-center gap-2 font-medium shadow-lg shadow-blue-200 transition-colors disabled:opacity-70"
         >
           <Plus size={18} />
           <span>Novo Morador</span>
@@ -131,23 +142,30 @@ export const ResidentsPage: React.FC<ResidentsPageProps> = ({ residents, setResi
         </div>
       </div>
 
-      {/* Grid List */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-        {filteredResidents.length > 0 ? (
-          filteredResidents.map((resident) => (
-            <ResidentCard 
-              key={resident.id} 
-              data={resident} 
-              onEdit={handleEdit}
-              onDelete={handleDelete}
-            />
-          ))
-        ) : (
-          <div className="col-span-full py-12 text-center text-slate-400 bg-white rounded-xl border border-slate-100 border-dashed">
-            <p>Nenhum morador encontrado.</p>
-          </div>
-        )}
-      </div>
+      {/* Loading State */}
+      {isLoading ? (
+        <div className="flex justify-center items-center py-20">
+          <Loader2 className="w-10 h-10 text-primary animate-spin" />
+        </div>
+      ) : (
+        /* Grid List */
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {filteredResidents.length > 0 ? (
+            filteredResidents.map((resident) => (
+              <ResidentCard 
+                key={resident.id} 
+                data={resident} 
+                onEdit={handleEdit}
+                onDelete={handleDelete}
+              />
+            ))
+          ) : (
+            <div className="col-span-full py-12 text-center text-slate-400 bg-white rounded-xl border border-slate-100 border-dashed">
+              <p>Nenhum morador encontrado.</p>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Form Modal */}
       <ResidentModal 
@@ -172,15 +190,17 @@ export const ResidentsPage: React.FC<ResidentsPageProps> = ({ residents, setResi
               <div className="flex items-center gap-3 w-full">
                 <button 
                   onClick={() => setDeleteId(null)}
+                  disabled={isSubmitting}
                   className="flex-1 px-4 py-2.5 rounded-lg border border-gray-300 text-slate-700 font-medium hover:bg-slate-50 transition-colors"
                 >
                   Cancelar
                 </button>
                 <button 
                   onClick={confirmDelete}
-                  className="flex-1 px-4 py-2.5 rounded-lg bg-red-500 hover:bg-red-600 text-white font-medium transition-colors shadow-lg shadow-red-200"
+                  disabled={isSubmitting}
+                  className="flex-1 px-4 py-2.5 rounded-lg bg-red-500 hover:bg-red-600 text-white font-medium transition-colors shadow-lg shadow-red-200 flex items-center justify-center gap-2"
                 >
-                  Excluir
+                  {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : 'Excluir'}
                 </button>
               </div>
             </div>

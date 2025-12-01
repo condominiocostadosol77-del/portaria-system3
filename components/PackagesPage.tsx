@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Plus, Search, Calendar, AlertTriangle, ArrowRight, ChevronLeft, Layers, Box } from 'lucide-react';
+import { Plus, Search, Calendar, AlertTriangle, ArrowRight, ChevronLeft, Layers, Box, Loader2 } from 'lucide-react';
 import { PackageItem, Resident, Company } from '../types';
 import { PackageCard } from './PackageCard';
 import { PackageModal } from './PackageModal';
@@ -8,14 +8,24 @@ import { PickupModal } from './PickupModal';
 interface PackagesPageProps {
   residents: Resident[];
   packages: PackageItem[];
-  setPackages: React.Dispatch<React.SetStateAction<PackageItem[]>>;
   companies: Company[];
+  onSave: (data: Partial<PackageItem>) => Promise<void>;
+  onDelete: (id: string) => Promise<void>;
+  onPickup: (id: string, name: string) => Promise<void>;
 }
 
-export const PackagesPage: React.FC<PackagesPageProps> = ({ residents, packages, setPackages, companies }) => {
+export const PackagesPage: React.FC<PackagesPageProps> = ({ 
+  residents, 
+  packages, 
+  companies,
+  onSave,
+  onDelete,
+  onPickup
+}) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<'todos' | 'pendentes' | 'retiradas'>('pendentes');
   const [selectedGroup, setSelectedGroup] = useState<{unit: string, block: string} | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   // Modals
   const [isNewModalOpen, setIsNewModalOpen] = useState(false);
@@ -36,7 +46,7 @@ export const PackagesPage: React.FC<PackagesPageProps> = ({ residents, packages,
       const matchesSearch = 
         pkg.recipientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
         pkg.unit.includes(searchTerm) ||
-        pkg.block.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (pkg.block && pkg.block.toLowerCase().includes(searchTerm.toLowerCase())) ||
         pkg.withdrawalCode.includes(searchTerm);
       
       if (filterStatus === 'pendentes') return matchesSearch && pkg.status === 'Aguardando Retirada';
@@ -104,42 +114,54 @@ export const PackagesPage: React.FC<PackagesPageProps> = ({ residents, packages,
   }, [filteredPackages, selectedGroup]);
 
   // Actions
-  const handleCreate = (data: Partial<PackageItem>) => {
-    const newPackage = {
-      ...data,
-      id: Math.random().toString(36).substr(2, 9),
-    } as PackageItem;
-    setPackages([newPackage, ...packages]);
-  };
-
-  const handlePickupConfirm = (name: string) => {
-    const now = new Date();
-    const timestamp = `${now.getDate().toString().padStart(2, '0')}/${(now.getMonth()+1).toString().padStart(2, '0')}/${now.getFullYear().toString().slice(-2)} ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
-    
-    if (pickupId) {
-      // Single Pickup
-      setPackages(prev => prev.map(p => 
-        p.id === pickupId 
-          ? { ...p, status: 'Retirada', pickedUpBy: name, pickedUpAt: timestamp } 
-          : p
-      ));
-      setPickupId(null);
-    } else if (isBulkPickupOpen && selectedGroup) {
-      // Bulk Pickup
-      setPackages(prev => prev.map(p => 
-        (p.unit === selectedGroup.unit && (p.block ? p.block.toUpperCase() : 'OUTROS') === selectedGroup.block && p.status === 'Aguardando Retirada')
-          ? { ...p, status: 'Retirada', pickedUpBy: name, pickedUpAt: timestamp }
-          : p
-      ));
-      setIsBulkPickupOpen(false);
-      setSelectedGroup(null); // Return to list as items are no longer pending
+  const handleCreate = async (data: Partial<PackageItem>) => {
+    setIsSubmitting(true);
+    try {
+      await onSave(data);
+      setIsNewModalOpen(false);
+    } catch (error) {
+      console.error(error);
+      alert('Erro ao salvar encomenda.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const handleDeleteConfirm = () => {
+  const handlePickupConfirm = async (name: string) => {
+    setIsSubmitting(true);
+    try {
+      if (pickupId) {
+        // Single Pickup
+        await onPickup(pickupId, name);
+        setPickupId(null);
+      } else if (isBulkPickupOpen && selectedGroup) {
+        // Bulk Pickup
+        const itemsToPickup = displayedPackages.filter(p => p.status === 'Aguardando Retirada');
+        // Execute all pickups in parallel
+        await Promise.all(itemsToPickup.map(p => onPickup(p.id, name)));
+        setIsBulkPickupOpen(false);
+        setSelectedGroup(null); // Return to list
+      }
+    } catch (error) {
+      console.error(error);
+      alert('Erro ao registrar retirada.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDeleteConfirm = async () => {
     if (deleteId) {
-      setPackages(prev => prev.filter(p => p.id !== deleteId));
-      setDeleteId(null);
+      setIsSubmitting(true);
+      try {
+        await onDelete(deleteId);
+        setDeleteId(null);
+      } catch (error) {
+        console.error(error);
+        alert('Erro ao excluir encomenda.');
+      } finally {
+        setIsSubmitting(false);
+      }
     }
   };
 
@@ -354,7 +376,7 @@ export const PackagesPage: React.FC<PackagesPageProps> = ({ residents, packages,
         isOpen={isBulkPickupOpen}
         onClose={() => setIsBulkPickupOpen(false)}
         onConfirm={handlePickupConfirm}
-        itemCount={displayedPackages.length}
+        itemCount={displayedPackages.filter(p => p.status === 'Aguardando Retirada').length}
       />
 
       {/* Delete Confirmation */}
@@ -372,15 +394,17 @@ export const PackagesPage: React.FC<PackagesPageProps> = ({ residents, packages,
               <div className="flex items-center gap-3 w-full">
                 <button 
                   onClick={() => setDeleteId(null)}
+                  disabled={isSubmitting}
                   className="flex-1 px-4 py-2.5 rounded-lg border border-gray-300 text-slate-700 font-medium hover:bg-slate-50 transition-colors"
                 >
                   Cancelar
                 </button>
                 <button 
                   onClick={handleDeleteConfirm}
-                  className="flex-1 px-4 py-2.5 rounded-lg bg-red-500 hover:bg-red-600 text-white font-medium transition-colors shadow-lg shadow-red-200"
+                  disabled={isSubmitting}
+                  className="flex-1 px-4 py-2.5 rounded-lg bg-red-500 hover:bg-red-600 text-white font-medium transition-colors shadow-lg shadow-red-200 flex items-center justify-center gap-2"
                 >
-                  Excluir
+                  {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : 'Excluir'}
                 </button>
               </div>
             </div>

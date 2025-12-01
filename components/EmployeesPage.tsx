@@ -1,17 +1,19 @@
 import React, { useState, useMemo } from 'react';
-import { Plus, Search, Calendar, AlertTriangle } from 'lucide-react';
+import { Plus, Search, Calendar, AlertTriangle, Loader2 } from 'lucide-react';
 import { Employee } from '../types';
 import { EmployeeCard } from './EmployeeCard';
 import { EmployeeModal } from './EmployeeModal';
 
 interface EmployeesPageProps {
   employees: Employee[];
-  setEmployees: React.Dispatch<React.SetStateAction<Employee[]>>;
+  onSave: (data: Partial<Employee>) => Promise<void>;
+  onDelete: (id: string) => Promise<void>;
 }
 
-export const EmployeesPage: React.FC<EmployeesPageProps> = ({ employees, setEmployees }) => {
+export const EmployeesPage: React.FC<EmployeesPageProps> = ({ employees, onSave, onDelete }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<'todos' | 'ativo' | 'inativo' | 'ferias'>('todos');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -50,23 +52,36 @@ export const EmployeesPage: React.FC<EmployeesPageProps> = ({ employees, setEmpl
     setDeleteId(id);
   };
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (deleteId) {
-      setEmployees(prev => prev.filter(e => e.id !== deleteId));
-      setDeleteId(null);
+      setIsSubmitting(true);
+      try {
+        await onDelete(deleteId);
+        setDeleteId(null);
+      } catch (error) {
+        console.error(error);
+        alert('Erro ao excluir funcionário.');
+      } finally {
+        setIsSubmitting(false);
+      }
     }
   };
 
-  const handleSubmit = (data: Omit<Employee, 'id'>) => {
-    if (editingId) {
-      // Edit existing
-      setEmployees(prev => prev.map(e => e.id === editingId ? { ...data, id: editingId } : e));
-    } else {
-      // Create new
-      const newId = Math.random().toString(36).substr(2, 9);
-      setEmployees(prev => [{ ...data, id: newId }, ...prev]);
+  const handleSubmit = async (data: Omit<Employee, 'id'>) => {
+    setIsSubmitting(true);
+    try {
+      if (editingId) {
+        await onSave({ ...data, id: editingId });
+      } else {
+        await onSave(data);
+      }
+      setIsModalOpen(false);
+    } catch (error) {
+      console.error(error);
+      alert('Erro ao salvar funcionário.');
+    } finally {
+      setIsSubmitting(false);
     }
-    setIsModalOpen(false);
   };
 
   const editingEmployee = editingId ? employees.find(e => e.id === editingId) : undefined;
@@ -174,15 +189,17 @@ export const EmployeesPage: React.FC<EmployeesPageProps> = ({ employees, setEmpl
               <div className="flex items-center gap-3 w-full">
                 <button 
                   onClick={() => setDeleteId(null)}
+                  disabled={isSubmitting}
                   className="flex-1 px-4 py-2.5 rounded-lg border border-gray-300 text-slate-700 font-medium hover:bg-slate-50 transition-colors"
                 >
                   Cancelar
                 </button>
                 <button 
                   onClick={confirmDelete}
-                  className="flex-1 px-4 py-2.5 rounded-lg bg-red-500 hover:bg-red-600 text-white font-medium transition-colors shadow-lg shadow-red-200"
+                  disabled={isSubmitting}
+                  className="flex-1 px-4 py-2.5 rounded-lg bg-red-500 hover:bg-red-600 text-white font-medium transition-colors shadow-lg shadow-red-200 flex items-center justify-center gap-2"
                 >
-                  Excluir
+                  {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : 'Excluir'}
                 </button>
               </div>
             </div>
