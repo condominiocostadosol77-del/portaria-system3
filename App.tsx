@@ -1,7 +1,3 @@
-<change>
-    <file>App.tsx</file>
-    <description>Fetch employees on mount and add fallback admin user for initial login</description>
-    <content><![CDATA[import React, { useState, useEffect } from 'react';
 import { Plus, Menu } from 'lucide-react';
 import { Sidebar } from './components/Sidebar';
 import { Dashboard } from './components/Dashboard';
