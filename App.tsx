@@ -1,4 +1,7 @@
-import React, { useState, useEffect } from 'react';
+<change>
+    <file>App.tsx</file>
+    <description>Fetch employees on mount and add fallback admin user for initial login</description>
+    <content><![CDATA[import React, { useState, useEffect } from 'react';
 import { Plus, Menu } from 'lucide-react';
 import { Sidebar } from './components/Sidebar';
 import { Dashboard } from './components/Dashboard';
@@ -99,8 +102,30 @@ const App: React.FC = () => {
 
   const fetchEmployees = async () => {
     const { data, error } = await supabase.from('employees').select('*').order('name');
-    if (error) console.error('Erro ao buscar funcionários:', error);
-    else setEmployees(data || []);
+    if (error) {
+      console.error('Erro ao buscar funcionários:', error);
+    } else {
+      // If database is empty, provide a fallback admin user so the system is usable
+      if (!data || data.length === 0) {
+        const fallbackAdmin: Employee = {
+          id: 'temp-admin',
+          name: 'Administrador (Acesso Inicial)',
+          cpf: '000.000.000-00',
+          role: 'Administrador',
+          shift: 'administrativo',
+          status: 'ativo',
+          entryTime: '00:00',
+          exitTime: '23:59',
+          phone: '',
+          email: 'admin@sistema.com',
+          admissionDate: new Date().toLocaleDateString('pt-BR'),
+          observations: 'Usuário temporário gerado automaticamente. Cadastre funcionários reais.'
+        };
+        setEmployees([fallbackAdmin]);
+      } else {
+        setEmployees(data);
+      }
+    }
   };
 
   const fetchOccurrences = async () => {
@@ -109,14 +134,19 @@ const App: React.FC = () => {
     else setOccurrences(data || []);
   };
 
-  // Initial Fetch when Authenticated
+  // Fetch Employees on Mount (Critical for Login Screen)
+  useEffect(() => {
+    fetchEmployees();
+  }, []);
+
+  // Fetch Protected Data when Authenticated
   useEffect(() => {
     if (isAuthenticated) {
       Promise.all([
         fetchResidents(),
         fetchPackages(),
         fetchCompanies(),
-        fetchEmployees(),
+        // fetchEmployees is already called on mount
         fetchOccurrences()
       ]);
     }
@@ -464,4 +494,5 @@ const App: React.FC = () => {
   );
 };
 
-export default App;
+export default App;]]></content>
+</change>
