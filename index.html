@@ -14,9 +14,9 @@
               sans: ['Inter', 'sans-serif'],
             },
             colors: {
-              primary: '#0066FF', // The blue used in the sidebar
-              secondary: '#A855F7', // The purple used for accents
-              'bg-app': '#F3F6F9', // Light grey background
+              primary: '#0066FF', 
+              secondary: '#A855F7',
+              'bg-app': '#F3F6F9',
             }
           }
         }
@@ -74,13 +74,16 @@
   "imports": {
     "react/": "https://aistudiocdn.com/react@^19.2.0/",
     "react": "https://aistudiocdn.com/react@^19.2.0",
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
-    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.555.0"
+    "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.1.1",
+    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.555.0",
+    "vite": "https://aistudiocdn.com/vite@^7.2.6",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/"
   }
 }
 </script>
 </head>
   <body>
     <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
   </body>
 </html>
